@@ -1,6 +1,8 @@
 name: Lint Agent Files
 
 on:
+  push:
+    branches: [main, master]
   pull_request:
     paths:
       - 'design/**'
@@ -15,32 +17,52 @@ on:
       - 'support/**'
       - 'spatial-computing/**'
       - 'specialized/**'
+      - 'scripts/**'
 
 jobs:
+  shellcheck:
+    name: ShellCheck (scripts/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on all scripts
+        run: shellcheck scripts/*.sh
+
   lint:
     name: Validate agent frontmatter and structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Get changed agent files
+      - name: Get changed agent files (PR) or all files (push)
         id: changed
         run: |
-          FILES=$(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD -- \
-            'design/**/*.md' 'engineering/**/*.md' 'game-development/**/*.md' 'marketing/**/*.md' 'paid-media/**/*.md' 'sales/**/*.md' 'product/**/*.md' \
-            'project-management/**/*.md' 'testing/**/*.md' 'support/**/*.md' \
-            'spatial-computing/**/*.md' 'specialized/**/*.md')
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD -- \
+              'design/**/*.md' 'engineering/**/*.md' 'game-development/**/*.md' \
+              'marketing/**/*.md' 'paid-media/**/*.md' 'sales/**/*.md' 'product/**/*.md' \
+              'project-management/**/*.md' 'testing/**/*.md' 'support/**/*.md' \
+              'spatial-computing/**/*.md' 'specialized/**/*.md')
+          else
+            FILES=$(find design engineering game-development marketing paid-media sales product \
+              project-management testing support spatial-computing specialized \
+              -name '*.md' -type f 2>/dev/null | sort | tr '\n' ' ')
+          fi
           {
             echo "files<<ENDOFLIST"
             echo "$FILES"
             echo "ENDOFLIST"
           } >> "$GITHUB_OUTPUT"
           if [ -z "$FILES" ]; then
-            echo "No agent files changed."
+            echo "No agent files to lint."
           else
-            echo "Changed files:"
+            echo "Files to lint:"
             echo "$FILES"
           fi
 
